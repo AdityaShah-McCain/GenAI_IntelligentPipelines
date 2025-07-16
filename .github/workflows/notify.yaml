@@ -53,17 +53,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Fetching jobs for run ${{ github.event.workflow_run.id }}"
-          # Use 'gh api' to get the metadata for the jobs in the run
-          jobs_json=$(gh api ${{ github.event.workflow_run.jobs_url }})
+          # Use 'gh run view' with --json to get structured data about the jobs. This is more robust.
+          run_data_json=$(gh run view ${{ github.event.workflow_run.id }} --json jobs)
           
-          # Use jq to parse the JSON and find the URL for the logs of the first failed job
-          log_download_url=$(echo "$jobs_json" | jq -r '.jobs[] | select(.conclusion == "failure") | .logs_url' | head -n 1)
+          # Use jq to parse the JSON and find the log URL of the first failed job.
+          # The correct field name from 'gh run view' is 'logUrl'.
+          log_download_url=$(echo "$run_data_json" | jq -r '.jobs[] | select(.conclusion == "failure") | .logUrl' | head -n 1)
           
           if [ -z "$log_download_url" ]; then
             echo "Could not find a failed job's log URL. Creating dummy log file."
             echo "Log retrieval failed. Could not find a failed job in the workflow run." > failure_logs.txt
           else
-            echo "Found log download URL. Downloading with curl..."
+            echo "Found log download URL: $log_download_url"
+            echo "Downloading with curl..."
             # Use curl with an Authorization header to download the zip file
             # -L follows redirects, which is essential for GitHub API downloads
             # -o saves the output to a file named logs.zip
