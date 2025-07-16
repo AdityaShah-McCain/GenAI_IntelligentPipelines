@@ -12,6 +12,8 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     # This single job runs on any completion and branches logic internally
+    permissions:
+      actions: read # <-- This is the crucial fix. It grants permission to read logs.
     steps:
       - name: Handle Success
         if: github.event.workflow_run.conclusion == 'success'
