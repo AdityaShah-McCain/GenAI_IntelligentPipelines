@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     # This single job runs on any completion and branches logic internally
     permissions:
-      actions: read # <-- This is still required to get the log download URL
+      actions: read # Still required to download artifacts from another workflow run.
     steps:
       - name: Handle Success
         if: github.event.workflow_run.conclusion == 'success'
@@ -47,52 +47,12 @@ jobs:
         if: github.event.workflow_run.conclusion == 'failure'
         run: pip install langchain langchain-google-genai requests
 
-      - name: Download logs from failed run
+      - name: Download failure logs from artifact
         if: github.event.workflow_run.conclusion == 'failure'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Fetching jobs for run ${{ github.event.workflow_run.id }}"
-          
-          ATTEMPTS=0
-          MAX_ATTEMPTS=5
-          WAIT_SECONDS=10
-          log_download_url=""
-
-          # This loop will retry until the logUrl is available or it times out.
-          until [ -n "$log_download_url" ]; do
-            if [ $ATTEMPTS -eq $MAX_ATTEMPTS ]; then
-              echo "Failed to fetch log URL after $MAX_ATTEMPTS attempts. Aborting."
-              exit 1
-            fi
-
-            ATTEMPTS=$((ATTEMPTS + 1))
-            echo "Attempting to fetch log URL... (Attempt ${ATTEMPTS}/${MAX_ATTEMPTS})"
-            
-            run_data_json=$(gh run view ${{ github.event.workflow_run.id }} --json jobs)
-            log_download_url=$(echo "$run_data_json" | jq -r '.jobs[] | select(.conclusion == "failure") | .logUrl' | head -n 1)
-
-            # Check if the URL is empty or the literal string "null"
-            if [ -z "$log_download_url" ] || [ "$log_download_url" == "null" ]; then
-              log_download_url="" # Reset to empty to ensure loop continues
-              echo "Log URL not yet available. Waiting ${WAIT_SECONDS}s..."
-              sleep $WAIT_SECONDS
-            fi
-          done
-          
-          echo "Found log download URL: $log_download_url"
-          echo "Downloading with curl..."
-          # Use curl with an Authorization header to download the zip file
-          curl -L -o logs.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$log_download_url"
-          
-          echo "Unzipping logs..."
-          unzip -q logs.zip || echo "Unzip failed. The log archive might be empty or corrupted."
-          
-          echo "Concatenating all log files for analysis..."
-          # Find all .txt files in all subdirectories and combine them into one file.
-          find . -name '*.txt' -print0 | xargs -0 cat > failure_logs.txt
-          
-          echo "Logs for analysis saved to failure_logs.txt."
+        uses: actions/download-artifact@v4
+        with:
+          name: failure-logs # Must match the name from the upload step in main.yml
+          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Run Analysis and Send Notification
         if: github.event.workflow_run.conclusion == 'failure'
@@ -105,4 +65,6 @@ jobs:
           COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
           AUTHOR: ${{ github.event.workflow_run.actor.login }}
         run: |
+          # The download-artifact action places the file (failure_logs.txt) in the current directory.
+          # The python script will find it automatically.
           python notify.py
