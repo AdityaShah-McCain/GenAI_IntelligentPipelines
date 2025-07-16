@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     # This single job runs on any completion and branches logic internally
     permissions:
-      actions: read # <-- This is the crucial fix. It grants permission to read logs.
+      actions: read # <-- This is still required for gh run download
     steps:
       - name: Handle Success
         if: github.event.workflow_run.conclusion == 'success'
@@ -52,27 +52,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Fetching jobs for run ${{ github.event.workflow_run.id }}"
-          # Use the 'gh api' command to interact with the GitHub API
-          jobs_json=$(gh api ${{ github.event.workflow_run.jobs_url }})
+          echo "Downloading all logs for run ${{ github.event.workflow_run.id }}"
+          # Use 'gh run download' which is the official and robust way to get run artifacts.
+          # Logs are stored as an artifact named 'logs'.
+          # The '--dir .' places the downloaded artifact in the current directory.
+          gh run download ${{ github.event.workflow_run.id }} --name logs --dir .
           
-          # Use jq to parse the JSON and find the URL for the logs of the first failed job
-          log_download_url=$(echo "$jobs_json" | jq -r '.jobs[] | select(.conclusion == "failure") | .logs_url' | head -n 1)
+          echo "Unzipping logs..."
+          # The command downloads a file named 'logs.zip'.
+          unzip logs.zip
           
-          if [ -z "$log_download_url" ]; then
-            echo "Could not find a failed job's log URL. Creating dummy log file."
-            echo "Log retrieval failed. Could not find a failed job in the workflow run." > failure_logs.txt
-          else
-            echo "Found log download URL. Downloading..."
-            # Download the zipped logs for the failed job
-            gh api "$log_download_url" --header 'Accept:application/vnd.github.v3+json' > logs.zip
-            
-            echo "Unzipping logs..."
-            unzip -q logs.zip
-            
-            # Concatenate all downloaded .txt log files into a single file for analysis
-            find . -name '*.txt' -print0 | xargs -0 cat > failure_logs.txt
-          fi
+          echo "Concatenating all log files for analysis..."
+          # Find all .txt files in all subdirectories and combine them into one file.
+          # This is simpler and more robust than trying to identify only the failed job's folder.
+          find . -name '*.txt' -print0 | xargs -0 cat > failure_logs.txt
           
           echo "Logs for analysis saved to failure_logs.txt."
 
