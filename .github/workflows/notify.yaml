@@ -53,6 +53,7 @@ jobs:
         with:
           name: failure-logs # Must match the name from the upload step in main.yml
           run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }} # Explicitly provide the token to ensure correct permissions
 
       - name: Run Analysis and Send Notification
         if: github.event.workflow_run.conclusion == 'failure'
