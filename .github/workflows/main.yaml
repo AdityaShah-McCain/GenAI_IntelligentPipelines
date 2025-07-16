@@ -19,7 +19,7 @@ jobs:
         run: |
           echo "Running build and test steps..."
           # To test the failure notification, uncomment the next line
-          exit 1
+          # exit 1
           echo "All steps passed!"
 
   # This job runs ONLY when all preceding jobs (in this case, 'build-and-test') succeed.
@@ -91,16 +91,27 @@ jobs:
       - name: Install Python dependencies
         run: pip install langchain langchain-google-genai requests
 
-      - name: Fetch logs from failed job
+      - name: Fetch logs from failed job with retry
         env:
           # The GITHUB_TOKEN is automatically created and provided by GitHub
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Waiting 15 seconds for API to finalize logs..."
-          sleep 15
-          echo "Fetching logs for run ${{ github.run_id }}..."
-          gh run view ${{ github.run_id }} --log-failed > failure_logs.txt
-          echo "Logs saved to failure_logs.txt"
+          ATTEMPTS=0
+          MAX_ATTEMPTS=5
+          WAIT_SECONDS=15
+          
+          until gh run view ${{ github.run_id }} --log-failed > failure_logs.txt; do
+            if [ $ATTEMPTS -eq $MAX_ATTEMPTS ]; then
+              echo "Failed to fetch logs after $MAX_ATTEMPTS attempts. Aborting."
+              exit 1
+            fi
+            
+            ATTEMPTS=$((ATTEMPTS + 1))
+            echo "Run is still in progress. Waiting ${WAIT_SECONDS}s for logs... (Attempt ${ATTEMPTS}/${MAX_ATTEMPTS})"
+            sleep $WAIT_SECONDS
+          done
+          
+          echo "Logs fetched successfully and saved to failure_logs.txt"
 
       - name: Run Analysis and Send Notification
         env:
