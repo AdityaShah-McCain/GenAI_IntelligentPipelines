@@ -19,7 +19,7 @@ jobs:
         run: |
           echo "Running build and test steps..."
           # To test the failure notification, uncomment the next line
-          # exit 1
+          exit 1
           echo "All steps passed!"
 
   # This job runs ONLY when all preceding jobs (in this case, 'build-and-test') succeed.
