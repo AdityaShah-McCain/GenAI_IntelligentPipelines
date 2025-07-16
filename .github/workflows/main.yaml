@@ -19,7 +19,7 @@ jobs:
         run: |
           echo "Running build and test steps..."
           # To test the failure notification, uncomment the next line
-          exit 1
+          # exit 1
           echo "All steps passed!"
 
   # This job runs ONLY when all preceding jobs (in this case, 'build-and-test') succeed.
@@ -96,6 +96,8 @@ jobs:
           # The GITHUB_TOKEN is automatically created and provided by GitHub
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "Waiting 15 seconds for API to finalize logs..."
+          sleep 15
           echo "Fetching logs for run ${{ github.run_id }}..."
           gh run view ${{ github.run_id }} --log-failed > failure_logs.txt
           echo "Logs saved to failure_logs.txt"
