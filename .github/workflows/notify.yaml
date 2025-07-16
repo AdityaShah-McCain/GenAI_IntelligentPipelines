@@ -1,0 +1,88 @@
+# .github/workflows/notify.yml
+# This workflow is triggered ONLY after the main "CI/CD Pipeline" workflow completes.
+name: Send Pipeline Notification
+
+on:
+  workflow_run:
+    workflows: ["CI/CD Pipeline"] # IMPORTANT: This MUST match the 'name' of the main workflow
+    types:
+      - completed
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    # This single job runs on any completion and branches logic internally
+    steps:
+      - name: Handle Success
+        if: github.event.workflow_run.conclusion == 'success'
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          PIPELINE_NAME: ${{ github.event.workflow_run.name }}
+          PIPELINE_URL: ${{ github.event.workflow_run.html_url }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+          AUTHOR: ${{ github.event.workflow_run.actor.login }}
+        run: |
+          JSON_PAYLOAD=$(cat <<EOF
+          {
+            "type": "message",
+            "attachments": [{"contentType": "application/vnd.microsoft.card.adaptive","content": {"type": "AdaptiveCard","version": "1.4","body": [{"type": "TextBlock","text": "CI/CD Pipeline Succeeded: ${PIPELINE_NAME}","weight": "Bolder", "size": "Large", "color": "Good"},{"type": "FactSet","facts": [{"title": "Status:", "value": "✅ Success"},{"title": "Author:", "value": "${AUTHOR}"},{"title": "Commit:", "value": "$(echo ${COMMIT_SHA} | cut -c1-7)"}]}],"actions": [{"type": "Action.OpenUrl", "title": "View Pipeline Run", "url": "${PIPELINE_URL}"}]}}]
+          }
+          EOF
+          )
+          curl -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$TEAMS_WEBHOOK_URL"
+
+      - name: Handle Failure
+        if: github.event.workflow_run.conclusion == 'failure'
+        uses: actions/checkout@v4 # Checkout code to access the notify.py script
+
+      - name: Setup Python for Failure Analysis
+        if: github.event.workflow_run.conclusion == 'failure'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        if: github.event.workflow_run.conclusion == 'failure'
+        run: pip install langchain langchain-google-genai requests
+
+      - name: Download logs from failed run
+        if: github.event.workflow_run.conclusion == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Fetching jobs for run ${{ github.event.workflow_run.id }}"
+          # Use the 'gh api' command to interact with the GitHub API
+          jobs_json=$(gh api ${{ github.event.workflow_run.jobs_url }})
+          
+          # Use jq to parse the JSON and find the URL for the logs of the first failed job
+          log_download_url=$(echo "$jobs_json" | jq -r '.jobs[] | select(.conclusion == "failure") | .logs_url' | head -n 1)
+          
+          if [ -z "$log_download_url" ]; then
+            echo "Could not find a failed job's log URL. Creating dummy log file."
+            echo "Log retrieval failed. Could not find a failed job in the workflow run." > failure_logs.txt
+          else
+            echo "Found log download URL. Downloading..."
+            # Download the zipped logs for the failed job
+            gh api "$log_download_url" --header 'Accept:application/vnd.github.v3+json' > logs.zip
+            
+            echo "Unzipping logs..."
+            unzip -q logs.zip
+            
+            # Concatenate all downloaded .txt log files into a single file for analysis
+            find . -name '*.txt' -print0 | xargs -0 cat > failure_logs.txt
+          fi
+          
+          echo "Logs for analysis saved to failure_logs.txt."
+
+      - name: Run Analysis and Send Notification
+        if: github.event.workflow_run.conclusion == 'failure'
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          PIPELINE_STATUS: "failure"
+          PIPELINE_NAME: ${{ github.event.workflow_run.name }}
+          PIPELINE_URL: ${{ github.event.workflow_run.html_url }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+          AUTHOR: ${{ github.event.workflow_run.actor.login }}
+        run: |
+          python notify.py
