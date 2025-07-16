@@ -53,31 +53,44 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Fetching jobs for run ${{ github.event.workflow_run.id }}"
-          # Use 'gh run view' with --json to get structured data about the jobs. This is more robust.
-          run_data_json=$(gh run view ${{ github.event.workflow_run.id }} --json jobs)
           
-          # Use jq to parse the JSON and find the log URL of the first failed job.
-          # The correct field name from 'gh run view' is 'logUrl'.
-          log_download_url=$(echo "$run_data_json" | jq -r '.jobs[] | select(.conclusion == "failure") | .logUrl' | head -n 1)
+          ATTEMPTS=0
+          MAX_ATTEMPTS=5
+          WAIT_SECONDS=10
+          log_download_url=""
+
+          # This loop will retry until the logUrl is available or it times out.
+          until [ -n "$log_download_url" ]; do
+            if [ $ATTEMPTS -eq $MAX_ATTEMPTS ]; then
+              echo "Failed to fetch log URL after $MAX_ATTEMPTS attempts. Aborting."
+              exit 1
+            fi
+
+            ATTEMPTS=$((ATTEMPTS + 1))
+            echo "Attempting to fetch log URL... (Attempt ${ATTEMPTS}/${MAX_ATTEMPTS})"
+            
+            run_data_json=$(gh run view ${{ github.event.workflow_run.id }} --json jobs)
+            log_download_url=$(echo "$run_data_json" | jq -r '.jobs[] | select(.conclusion == "failure") | .logUrl' | head -n 1)
+
+            # Check if the URL is empty or the literal string "null"
+            if [ -z "$log_download_url" ] || [ "$log_download_url" == "null" ]; then
+              log_download_url="" # Reset to empty to ensure loop continues
+              echo "Log URL not yet available. Waiting ${WAIT_SECONDS}s..."
+              sleep $WAIT_SECONDS
+            fi
+          done
           
-          if [ -z "$log_download_url" ]; then
-            echo "Could not find a failed job's log URL. Creating dummy log file."
-            echo "Log retrieval failed. Could not find a failed job in the workflow run." > failure_logs.txt
-          else
-            echo "Found log download URL: $log_download_url"
-            echo "Downloading with curl..."
-            # Use curl with an Authorization header to download the zip file
-            # -L follows redirects, which is essential for GitHub API downloads
-            # -o saves the output to a file named logs.zip
-            curl -L -o logs.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$log_download_url"
-            
-            echo "Unzipping logs..."
-            unzip -q logs.zip || echo "Unzip failed. The log archive might be empty or corrupted."
-            
-            echo "Concatenating all log files for analysis..."
-            # Find all .txt files in all subdirectories and combine them into one file.
-            find . -name '*.txt' -print0 | xargs -0 cat > failure_logs.txt
-          fi
+          echo "Found log download URL: $log_download_url"
+          echo "Downloading with curl..."
+          # Use curl with an Authorization header to download the zip file
+          curl -L -o logs.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$log_download_url"
+          
+          echo "Unzipping logs..."
+          unzip -q logs.zip || echo "Unzip failed. The log archive might be empty or corrupted."
+          
+          echo "Concatenating all log files for analysis..."
+          # Find all .txt files in all subdirectories and combine them into one file.
+          find . -name '*.txt' -print0 | xargs -0 cat > failure_logs.txt
           
           echo "Logs for analysis saved to failure_logs.txt."
 
