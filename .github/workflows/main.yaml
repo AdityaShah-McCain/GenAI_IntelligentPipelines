@@ -31,6 +31,69 @@ jobs:
             echo "This line will not be reached."
           } &> build_logs.txt
 
+    #   - name: Run Build and Tests and Capture Logs
+    #     id: run_build
+    #     continue-on-error: true
+    #     run: |
+    #       {
+    #         echo "Running a Python script with a missing dependency..."
+    #         # Create a dummy python script
+    #         cat << EOF > test_script.py
+    #         import pandas as pd
+    #         print("Attempting to use pandas...")
+    #         df = pd.DataFrame({'col1': [1, 2], 'col2': [3, 4]})
+    #         print(df)
+    #         EOF
+    #         # Run the script, which will fail because pandas is not installed
+    #         python test_script.py
+    #       } &> build_logs.txt
+
+    #   - name: Run Build and Tests and Capture Logs
+    #     id: run_build
+    #     continue-on-error: true
+    #     run: |
+    #       {
+    #         echo "Running a script that accesses a non-existent file..."
+    #         # The 'cat' command will fail because 'no_such_file.txt' does not exist
+    #         cat no_such_file.txt
+    #         echo "This line will not be reached."
+    #       } &> build_logs.txt
+
+    #   - name: Run Build and Tests and Capture Logs
+    #     id: run_build
+    #     continue-on-error: true
+    #     run: |
+    #       {
+    #         echo "Setting up Terraform and running with a broken config file..."
+    #         # Install Terraform
+    #         sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
+    #         wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    #         gpg --no-default-keyring --keyring /usr/share/keyrings/hashicorp-archive-keyring.gpg --fingerprint
+    #         echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+    #         sudo apt update
+    #         sudo apt-get install terraform
+
+    #         echo "Creating an invalid Terraform file..."
+    #         # Create a main.tf file with an obvious syntax error (missing '=' for a variable)
+    #         cat << EOF > main.tf
+    #         variable "region" {
+    #           description "The AWS region."
+    #           type string
+    #           default "us-east-1"
+    #         }
+
+    #         resource "aws_instance" "example" {
+    #           ami           "ami-0c55b159cbfafe1f0" # Invalid: should be ami = "..."
+    #           instance_type = "t2.micro"
+    #         }
+    #         EOF
+
+    #         echo "Running terraform init and validate..."
+    #         # Terraform init will likely pass, but validate will fail due to the syntax error
+    #         terraform init -no-color
+    #         terraform validate -no-color
+    #       } &> build_logs.txt
+
       - name: Upload failure logs
         # This step only runs if the previous step had an error.
         if: steps.run_build.outcome == 'failure'
@@ -46,7 +109,7 @@ jobs:
         if: steps.run_build.outcome == 'failure'
         run: |
           echo "Failing the job to trigger failure notifications."
-          exit 1
+        #   exit 1
 
   notify-on-success:
     runs-on: ubuntu-latest
