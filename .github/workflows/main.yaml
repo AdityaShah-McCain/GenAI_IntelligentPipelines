@@ -31,22 +31,22 @@ jobs:
             echo "This line will not be reached."
           } &> build_logs.txt
 
-    #   - name: Run Build and Tests and Capture Logs
-    #     id: run_build
-    #     continue-on-error: true
-    #     run: |
-    #       {
-    #         echo "Running a Python script with a missing dependency..."
-    #         # Create a dummy python script
-    #         cat << EOF > test_script.py
-    #         import pandas as pd
-    #         print("Attempting to use pandas...")
-    #         df = pd.DataFrame({'col1': [1, 2], 'col2': [3, 4]})
-    #         print(df)
-    #         EOF
-    #         # Run the script, which will fail because pandas is not installed
-    #         python test_script.py
-    #       } &> build_logs.txt
+      - name: Run Build and Tests and Capture Logs
+        id: run_build
+        continue-on-error: true
+        run: |
+          {
+            echo "Running a Python script with a missing dependency..."
+            # Create a dummy python script
+            cat << EOF > test_script.py
+            import pandas as pd
+            print("Attempting to use pandas...")
+            df = pd.DataFrame({'col1': [1, 2], 'col2': [3, 4]})
+            print(df)
+            EOF
+            # Run the script, which will fail because pandas is not installed
+            python test_script.py
+          } &> build_logs.txt
 
     #   - name: Run Build and Tests and Capture Logs
     #     id: run_build
