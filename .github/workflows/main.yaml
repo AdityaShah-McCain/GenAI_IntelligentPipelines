@@ -87,21 +87,25 @@ jobs:
           sudo apt update
           sudo apt-get install terraform
 
-          echo "Creating an invalid Terraform file..."
-          # This .tf file has an invalid resource type name ('aws_isntance' instead of 'aws_instance')
+          echo "Creating an invalid Azure Terraform file..."
+          # This .tf file has an invalid argument name ('locatoin' instead of 'location')
           cat << EOF > main.tf
           terraform {
             required_providers {
-              aws = {
-                source  = "hashicorp/aws"
-                version = "~> 4.0"
+              azurerm = {
+                source  = "hashicorp/azurerm"
+                version = "~> 3.0"
               }
             }
           }
 
-          resource "aws_isntance" "example" { # <-- Deliberate typo here
-            ami           = "ami-0c55b159cbfafe1f0"
-            instance_type = "t2.micro"
+          provider "azurerm" {
+            features {}
+          }
+
+          resource "azurerm_resource_group" "example" {
+            name     = "example-resources"
+            locatoin = "East US" # <-- Deliberate typo here
           }
           EOF
 
