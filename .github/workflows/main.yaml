@@ -21,7 +21,7 @@ jobs:
           echo "This is a sample success message."
           echo "Simulating an error now..."
           # To test the failure notification, uncomment the next line
-          # exit 1
+          exit 1
           echo "This line will not be reached."
 
   notify-on-success:
