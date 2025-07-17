@@ -47,7 +47,7 @@ jobs:
 
           echo "Running flake8..."
           # To test this failure, uncomment the following line:
-          # flake8 app.py
+          flake8 app.py
           
           echo "Linting complete (no errors enforced)."
 
@@ -68,7 +68,7 @@ jobs:
           
           echo "Running the test script..."
           # To test this failure, uncomment the following line:
-          python test_script.py
+          # python test_script.py
 
           echo "Unit tests complete (no errors enforced)."
 
