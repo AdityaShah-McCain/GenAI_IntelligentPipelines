@@ -1,0 +1,28 @@
+# .github/workflows/parallel-test.yml
+# This workflow is designed to test how the notification system handles
+# multiple, simultaneous job failures.
+name: Parallel Failure Test
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run failing backend tests
+        run: |
+          echo "Simulating a backend database connection failure..."
+          echo "Error: Timed out while waiting for connection to pg_test_db"
+          exit 1
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run failing frontend tests
+        run: |
+          echo "Simulating a frontend component rendering failure..."
+          echo "TypeError: Cannot read properties of null (reading 'map')"
+          exit 1
