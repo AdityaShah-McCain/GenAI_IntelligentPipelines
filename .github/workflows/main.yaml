@@ -68,7 +68,7 @@ jobs:
           
           echo "Running the test script..."
           # To test this failure, uncomment the following line:
-          # python test_script.py
+          python test_script.py
 
           echo "Unit tests complete (no errors enforced)."
 
@@ -113,6 +113,6 @@ jobs:
           terraform init -no-color
           
           # To test this failure, uncomment the following line:
-          # terraform validate -no-color
+          terraform validate -no-color
 
           echo "Integration tests complete (no errors enforced)."
