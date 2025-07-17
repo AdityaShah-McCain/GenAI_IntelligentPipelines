@@ -21,7 +21,7 @@ jobs:
           echo "This is a sample success message."
           echo "Simulating an error now..."
           # To test the failure notification, uncomment the next line
-          exit 1
+          # exit 1
           echo "This line will not be reached."
 
   notify-on-success:
@@ -50,6 +50,8 @@ jobs:
     permissions:
       actions: read # Permission to read logs from other jobs
     steps:
+      - name: Checkout repository # <-- This was the missing step
+        uses: actions/checkout@v4
       - name: Fetch logs from failed job
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
