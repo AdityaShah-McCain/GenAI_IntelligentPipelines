@@ -4,6 +4,7 @@
 name: Parallel Failure Test
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - '**'
