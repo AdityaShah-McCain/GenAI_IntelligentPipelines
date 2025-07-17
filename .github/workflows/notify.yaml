@@ -5,7 +5,7 @@ name: Send Pipeline Notification
 
 on:
   workflow_run:
-    workflows: ["CI/CD Pipeline"] # This MUST match the 'name' of the main workflow
+    workflows: ["CI/CD Pipeline", "Parallel Failure Test"] # This MUST match the 'name' of the main workflow
     types:
       - completed
 
