@@ -34,4 +34,4 @@ jobs:
           echo "Running unit tests..."
           echo "A test is about to fail..."
           # To test the failure notification, this command will cause an error
-          cat non_existent_test_report.xml
+        #   cat non_existent_test_report.xml
