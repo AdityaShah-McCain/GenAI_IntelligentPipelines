@@ -19,7 +19,7 @@ jobs:
         id: run_build # Give the step an ID to reference its outcome
         # continue-on-error is essential. It allows the subsequent steps to run
         # even if the script inside this step fails.
-        continue-on-error: true
+        # continue-on-error: true
         run: |
           # The entire script block is wrapped in { ... }, and all output (stdout & stderr)
           # is redirected to a local file named build_logs.txt
