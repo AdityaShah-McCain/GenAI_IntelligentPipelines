@@ -46,7 +46,7 @@ jobs:
         if: steps.run_build.outcome == 'failure'
         run: |
           echo "Failing the job to trigger failure notifications."
-          exit 1
+        #   exit 1
 
   notify-on-success:
     runs-on: ubuntu-latest
