@@ -1,5 +1,6 @@
 # .github/workflows/main.yml
-# This single workflow file handles all logic using a robust self-capture method for logs.
+# This is the main CI/CD pipeline. It contains multiple jobs.
+# It does NOT handle notifications directly.
 name: CI/CD Pipeline
 
 on:
@@ -9,155 +10,27 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Run Build and Tests and Capture Logs
-        id: run_build_1 # Give the step an ID to reference its outcome
-        # continue-on-error is essential. It allows the subsequent steps to run
-        # even if the script inside this step fails.
-        continue-on-error: true
+      - name: Run Build Steps
         run: |
-          # The entire script block is wrapped in { ... }, and all output (stdout & stderr)
-          # is redirected to a local file named build_logs.txt
-          {
-            echo "Running build and test steps..."
-            echo "This is a sample success message."
-            echo "Simulating an error now..."
-            exit 1
-            echo "This line will not be reached."
-          } &> build_logs.txt
+          echo "Running build steps..."
+          # This job will succeed
+          echo "Build successful!"
 
-      - name: Run Build and Tests and Capture Logs
-        id: run_build_2
-        continue-on-error: true
-        run: |
-          {
-            echo "Running a Python script with a missing dependency..."
-            # Create a dummy python script
-            cat << EOF > test_script.py
-            import pandas as pd
-            print("Attempting to use pandas...")
-            df = pd.DataFrame({'col1': [1, 2], 'col2': [3, 4]})
-            print(df)
-            EOF
-            # Run the script, which will fail because pandas is not installed
-            python test_script.py
-          } &> build_logs.txt
-
-      - name: Run Build and Tests and Capture Logs
-        id: run_build_3
-        continue-on-error: true
-        run: |
-          {
-            echo "Running a script that accesses a non-existent file..."
-            # The 'cat' command will fail because 'no_such_file.txt' does not exist
-            cat no_such_file.txt
-            echo "This line will not be reached."
-          } &> build_logs.txt
-
-      - name: Run Build and Tests and Capture Logs
-        id: run_build_4
-        continue-on-error: true
-        run: |
-          {
-            echo "Setting up Terraform and running with a broken config file..."
-            # Install Terraform
-            sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
-            wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-            gpg --no-default-keyring --keyring /usr/share/keyrings/hashicorp-archive-keyring.gpg --fingerprint
-            echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-            sudo apt update
-            sudo apt-get install terraform
-
-            echo "Creating an invalid Terraform file..."
-            # Create a main.tf file with an obvious syntax error (missing '=' for a variable)
-            cat << EOF > main.tf
-            variable "region" {
-              description "The AWS region."
-              type string
-              default "us-east-1"
-            }
-
-            resource "aws_instance" "example" {
-              ami           "ami-0c55b159cbfafe1f0" # Invalid: should be ami = "..."
-              instance_type = "t2.micro"
-            }
-            EOF
-
-            echo "Running terraform init and validate..."
-            # Terraform init will likely pass, but validate will fail due to the syntax error
-            terraform init -no-color
-            terraform validate -no-color
-          } &> build_logs.txt
-
-      - name: Upload failure logs
-        # This step only runs if the previous step had an error.
-        if: steps.run_build_1.outcome == 'failure' || steps.run_build_2.outcome == 'failure' || steps.run_build_3.outcome == 'failure' || steps.run_build_4.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: failure-logs
-          path: build_logs.txt
-          retention-days: 1
-
-      - name: Fail the job if build failed
-        # This is the final, crucial step. It explicitly fails the job if the build step
-        # failed, ensuring that downstream jobs with 'if: failure()' will trigger correctly.
-        if: steps.run_build_1.outcome == 'failure' || steps.run_build_2.outcome == 'failure' || steps.run_build_3.outcome == 'failure' || steps.run_build_4.outcome == 'failure'
-        run: |
-          echo "Failing the job to trigger failure notifications."
-          exit 1
-
-  notify-on-success:
+  # This job depends on the 'build' job succeeding first.
+  test:
     runs-on: ubuntu-latest
-    needs: build-and-test
-    if: success() # This condition now works reliably
+    needs: build
     steps:
-      - name: Send Success Notification to Teams
-        env:
-          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
-          PIPELINE_NAME: "${{ github.workflow }}"
-          PIPELINE_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          COMMIT_SHA: "${{ github.sha }}"
-          AUTHOR: "${{ github.actor }}"
-        run: |
-          JSON_PAYLOAD=$(cat <<EOF
-          { "type": "message", "attachments": [{"contentType": "application/vnd.microsoft.card.adaptive","content": {"type": "AdaptiveCard","version": "1.4","body": [{"type": "TextBlock","text": "CI/CD Pipeline Succeeded: ${PIPELINE_NAME}","weight": "Bolder", "size": "Large", "color": "Good"},{"type": "FactSet","facts": [{"title": "Status:", "value": "✅ Success"},{"title": "Author:", "value": "${AUTHOR}"},{"title": "Commit:", "value": "$(echo ${COMMIT_SHA} | cut -c1-7)"}]}],"actions": [{"type": "Action.OpenUrl", "title": "View Pipeline Run", "url": "${PIPELINE_URL}"}]}}]}
-          EOF
-          )
-          curl -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$TEAMS_WEBHOOK_URL"
-
-  notify-on-failure:
-    runs-on: ubuntu-latest
-    needs: build-and-test # Depends directly on the build job now
-    if: failure() # This condition now works reliably
-    steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - name: Install Python dependencies
-        run: pip install langchain langchain-google-genai requests
-      - name: Download failure logs from artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: failure-logs # Downloads the artifact created by the build-and-test job
-      - name: Run Analysis and Send Notification
-        env:
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
-          PIPELINE_STATUS: "failure"
-          PIPELINE_NAME: "${{ github.workflow }}"
-          PIPELINE_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          COMMIT_SHA: "${{ github.sha }}"
-          AUTHOR: "${{ github.actor }}"
+      - name: Run Tests
         run: |
-          # The downloaded artifact is named 'build_logs.txt', but our script expects 'failure_logs.txt'.
-          # We will rename it to match what the script expects.
-          mv build_logs.txt failure_logs.txt
-          python notify.py
+          echo "Running unit tests..."
+          echo "A test is about to fail..."
+          # To test the failure notification, this command will cause an error
+          cat non_existent_test_report.xml

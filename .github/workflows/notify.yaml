@@ -1,20 +1,19 @@
 # .github/workflows/notify.yml
 # This workflow is triggered ONLY after the main "CI/CD Pipeline" workflow completes.
+# It is responsible for all success/failure notifications.
 name: Send Pipeline Notification
 
 on:
-    workflow_dispatch:
-#   workflow_run:
-#     workflows: ["CI/CD Pipeline"] # IMPORTANT: This MUST match the 'name' of the main workflow
-#     types:
-#       - completed
+  workflow_run:
+    workflows: ["CI/CD Pipeline"] # This MUST match the 'name' of the main workflow
+    types:
+      - completed
 
 jobs:
   notify:
     runs-on: ubuntu-latest
-    # This single job runs on any completion and branches logic internally
     permissions:
-      actions: read # Still required to download artifacts from another workflow run.
+      actions: read # Required to read logs from the completed workflow run
     steps:
       - name: Handle Success
         if: github.event.workflow_run.conclusion == 'success'
@@ -26,10 +25,7 @@ jobs:
           AUTHOR: ${{ github.event.workflow_run.actor.login }}
         run: |
           JSON_PAYLOAD=$(cat <<EOF
-          {
-            "type": "message",
-            "attachments": [{"contentType": "application/vnd.microsoft.card.adaptive","content": {"type": "AdaptiveCard","version": "1.4","body": [{"type": "TextBlock","text": "CI/CD Pipeline Succeeded: ${PIPELINE_NAME}","weight": "Bolder", "size": "Large", "color": "Good"},{"type": "FactSet","facts": [{"title": "Status:", "value": "✅ Success"},{"title": "Author:", "value": "${AUTHOR}"},{"title": "Commit:", "value": "$(echo ${COMMIT_SHA} | cut -c1-7)"}]}],"actions": [{"type": "Action.OpenUrl", "title": "View Pipeline Run", "url": "${PIPELINE_URL}"}]}}]
-          }
+          { "type": "message", "attachments": [{"contentType": "application/vnd.microsoft.card.adaptive","content": {"type": "AdaptiveCard","version": "1.4","body": [{"type": "TextBlock","text": "CI/CD Pipeline Succeeded: ${PIPELINE_NAME}","weight": "Bolder", "size": "Large", "color": "Good"},{"type": "FactSet","facts": [{"title": "Status:", "value": "✅ Success"},{"title": "Author:", "value": "${AUTHOR}"},{"title": "Commit:", "value": "$(echo ${COMMIT_SHA} | cut -c1-7)"}]}],"actions": [{"type": "Action.OpenUrl", "title": "View Pipeline Run", "url": "${PIPELINE_URL}"}]}}]}
           EOF
           )
           curl -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$TEAMS_WEBHOOK_URL"
@@ -48,13 +44,15 @@ jobs:
         if: github.event.workflow_run.conclusion == 'failure'
         run: pip install langchain langchain-google-genai requests
 
-      - name: Download failure logs from artifact
+      - name: Fetch logs from the failed job
         if: github.event.workflow_run.conclusion == 'failure'
-        uses: actions/download-artifact@v4
-        with:
-          name: failure-logs # Must match the name from the upload step in main.yml
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }} # Explicitly provide the token to ensure correct permissions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # This command reliably gets the logs of the specific job that failed
+          # in the completed workflow run.
+          gh run view ${{ github.event.workflow_run.id }} --log-failed > failure_logs.txt
+          echo "Logs from the failed job have been saved."
 
       - name: Run Analysis and Send Notification
         if: github.event.workflow_run.conclusion == 'failure'
@@ -67,6 +65,4 @@ jobs:
           COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
           AUTHOR: ${{ github.event.workflow_run.actor.login }}
         run: |
-          # The download-artifact action places the file (failure_logs.txt) in the current directory.
-          # The python script will find it automatically.
           python notify.py
