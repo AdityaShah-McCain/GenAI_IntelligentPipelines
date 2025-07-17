@@ -27,7 +27,7 @@ jobs:
             echo "Running build and test steps..."
             echo "This is a sample success message."
             echo "Simulating an error now..."
-            # exit 1
+            exit 1
             echo "This line will not be reached."
           } &> build_logs.txt
 
