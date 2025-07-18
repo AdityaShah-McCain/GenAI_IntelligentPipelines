@@ -27,7 +27,7 @@ def get_langchain_analysis(logs: str) -> str:
     """
     try:
         # Initialize the LLM. We're using Gemini Flash for speed and cost-effectiveness.
-        llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro", temperature=0.3, google_api_key=GOOGLE_API_KEY)
+        llm = ChatGoogleGenerativeAI(model="models/gemini-2.5-pro", temperature=0.3, google_api_key=GOOGLE_API_KEY)
         
         # Define the prompt template for the LLM
         prompt_template = textwrap.dedent("""
