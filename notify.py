@@ -45,28 +45,28 @@ def get_langchain_analysis(logs: str) -> str:
         # """)
 
         # Code Fixes Prompt Template
-        prompt_template = textwrap.dedent("""
-            You are an expert DevOps engineer and a senior software developer reviewing a failed CI/CD pipeline. Your sole task is to analyze the following logs, identify the root cause of the failure, and provide a direct, actionable code or configuration fix. Do not provide a summary of the error. Focus only on the solution.
-            If possible, present the fix as a clear "before" and "after" code block. If the fix involves a command, provide the exact command to run.
-
-            ---
-            Logs:
-            {logs}
-            ---
-        """)
-
-        # Error Analysis and Code Fixes Prompt Template
         # prompt_template = textwrap.dedent("""
-        #     You are an expert DevOps engineer and a senior software developer reviewing a failed CI/CD pipeline. Your task is to analyze the following logs and provide a complete and concise report.
-        #     Your report must contain two distinct sections:
-        #     1.  **Error Analysis:** In 1-2 sentences, clearly explain the root cause of the failure in plain language.
-        #     2.  **Suggested Fix:** Provide a specific, actionable code or configuration change to resolve the error. If possible, show the change with "before" and "after" code blocks.
+        #     You are an expert DevOps engineer and a senior software developer reviewing a failed CI/CD pipeline. Your sole task is to analyze the following logs, identify the root cause of the failure, and provide a direct, actionable code or configuration fix. Do not provide a summary of the error. Focus only on the solution.
+        #     If possible, present the fix as a clear "before" and "after" code block. If the fix involves a command, provide the exact command to run.
 
         #     ---
         #     Logs:
         #     {logs}
         #     ---
         # """)
+
+        # Error Analysis and Code Fixes Prompt Template
+        prompt_template = textwrap.dedent("""
+            You are an expert DevOps engineer and a senior software developer reviewing a failed CI/CD pipeline. Your task is to analyze the following logs and provide a complete and concise report.
+            Your report must contain two distinct sections:
+            1.  **Error Analysis:** In 1-2 sentences, clearly explain the root cause of the failure in plain language.
+            2.  **Suggested Fix:** Provide a specific, actionable code or configuration change to resolve the error. If possible, show the change with "before" and "after" code blocks.
+
+            ---
+            Logs:
+            {logs}
+            ---
+        """)
 
         prompt = ChatPromptTemplate.from_template(prompt_template)
         
