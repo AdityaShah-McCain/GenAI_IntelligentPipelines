@@ -192,14 +192,15 @@ def get_langchain_analysis(logs: str) -> str:
     explanation of the error from the provided logs.
     """
     try:
-        # Using "Prompt 2" for both analysis and fixes.
+        # --- THIS PROMPT IS UPDATED ---
+        # It now explicitly tells the LLM to avoid Markdown fences and use indentation.
         prompt_template = textwrap.dedent("""
             You are an expert DevOps engineer and a senior software developer reviewing a failed CI/CD pipeline. Your task is to analyze the following logs and provide a complete and concise report.
 
             Your report must contain two distinct sections:
 
             1.  **Error Analysis:** In 1-2 sentences, clearly explain the root cause of the failure in plain language.
-            2.  **Suggested Fix:** Provide a specific, actionable code or configuration change to resolve the error. If possible, show the change with "before" and "after" code blocks.
+            2.  **Suggested Fix:** Provide a specific, actionable code or configuration change to resolve the error. **IMPORTANT: Do not use Markdown code fences (```). Instead, format any code by indenting each line with four spaces.**
 
             ---
             Logs:
@@ -245,12 +246,12 @@ def send_to_teams(card: dict):
 def create_teams_failure_card(analysis_text):
     """Creates the JSON for a failure Adaptive Card."""
     return {
-        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json", "type": "AdaptiveCard", "version": "1.4",
+        "$schema": "[http://adaptivecards.io/schemas/adaptive-card.json](http://adaptivecards.io/schemas/adaptive-card.json)", "type": "AdaptiveCard", "version": "1.4",
         "body": [
             {"type": "TextBlock", "text": f"CI/CD Pipeline Failed: {PIPELINE_NAME}", "weight": "Bolder", "size": "Large", "color": "Attention"},
             {"type": "FactSet", "facts": [{"title": "Status:", "value": "🔴 Failure"}, {"title": "Author:", "value": AUTHOR}, {"title": "Commit:", "value": COMMIT_SHA[:7]}], "spacing": "Medium"},
             {"type": "TextBlock", "text": "**AI Error Analysis:**", "wrap": True, "size": "Medium", "weight": "Bolder"},
-            {"type": "TextBlock", "text": analysis_text, "wrap": True, "spacing": "Small"}
+            {"type": "TextBlock", "text": analysis_text, "wrap": True, "spacing": "Small", "fontType": "Monospace"}
         ],
         "actions": [{"type": "Action.OpenUrl", "title": "View Pipeline Run", "url": PIPELINE_URL}]
     }
@@ -276,7 +277,6 @@ def main():
         else:
             analysis = get_langchain_analysis(logs)
             
-        # --- THIS IS THE FIX ---
         # Replace every newline with '  \n' to force a hard line break in Teams.
         teams_compatible_analysis = analysis.replace('\n', '  \n')
         
