@@ -188,19 +188,28 @@ AUTHOR = os.environ.get("AUTHOR", "N/A")
 
 def get_langchain_analysis(logs: str) -> str:
     """
-    Invokes a LangChain chain to get a concise, natural-language
-    explanation of the error from the provided logs.
+    Invokes a LangChain chain to get a structured report containing
+    analysis, remediation, and a code fix.
     """
     try:
-        # This prompt instructs the LLM to use indentation for code, which is
-        # more reliable for rendering in Teams than Markdown fences.
+        # This new prompt asks for three distinct sections with clear separators.
         prompt_template = textwrap.dedent("""
             You are an expert DevOps engineer and a senior software developer reviewing a failed CI/CD pipeline. Your task is to analyze the following logs and provide a complete and concise report.
 
-            Your report must contain two distinct sections:
+            Your report MUST be structured into exactly three sections, separated by '---ANALYSIS-BREAK---' and '---CODE-BREAK---'.
 
-            1.  **Error Analysis:** In 1-2 sentences, clearly explain the root cause of the failure in plain language.
-            2.  **Suggested Fix:** Provide a specific, actionable code or configuration change to resolve the error. **IMPORTANT: Do not use Markdown code fences (```). Instead, format any code by indenting each line with four spaces.**
+            SECTION 1: ERROR ANALYSIS
+            In 1-2 sentences, clearly explain the root cause of the failure in plain language.
+
+            ---ANALYSIS-BREAK---
+
+            SECTION 2: REMEDIATION
+            In natural language, explain the steps required to fix the error.
+
+            ---CODE-BREAK---
+
+            SECTION 3: CODE FIX
+            Provide only the specific, actionable code or configuration snippet required to resolve the error. Do not include any explanatory text in this section. If possible, show the change with "before" and "after" code blocks.
 
             ---
             Logs:
@@ -243,19 +252,39 @@ def send_to_teams(card: dict):
         print(f"Failed to send message to Teams: {e}")
         print(f"Response Body: {e.response.text if e.response else 'No response'}")
 
-def create_teams_failure_card(analysis_text):
-    """Creates the JSON for a failure Adaptive Card."""
-    # --- THIS IS THE FIX ---
-    # The $schema value was previously malformed as a Markdown link.
-    # It is now a valid JSON string.
+def create_teams_failure_card(error_analysis, remediation, code_fix):
+    """Creates the JSON for a failure Adaptive Card with separate sections."""
+    
+    # Start with the base elements of the card
+    body_elements = [
+        {"type": "TextBlock", "text": f"CI/CD Pipeline Failed: {PIPELINE_NAME}", "weight": "Bolder", "size": "Large", "color": "Attention"},
+        {"type": "FactSet", "facts": [{"title": "Status:", "value": "🔴 Failure"}, {"title": "Author:", "value": AUTHOR}, {"title": "Commit:", "value": COMMIT_SHA[:7]}], "spacing": "Medium"},
+    ]
+
+    # Conditionally add each section to the card body if it exists
+    if error_analysis:
+        body_elements.extend([
+            {"type": "TextBlock", "text": "**Error Analysis:**", "wrap": True, "size": "Medium", "weight": "Bolder"},
+            {"type": "TextBlock", "text": error_analysis, "wrap": True, "spacing": "Small"}
+        ])
+
+    if remediation:
+        body_elements.extend([
+            {"type": "TextBlock", "text": "**Remediation:**", "wrap": True, "size": "Medium", "weight": "Bolder"},
+            {"type": "TextBlock", "text": remediation, "wrap": True, "spacing": "Small"}
+        ])
+
+    if code_fix:
+        body_elements.extend([
+            {"type": "TextBlock", "text": "**Code Fix:**", "wrap": True, "size": "Medium", "weight": "Bolder"},
+            {"type": "TextBlock", "text": code_fix, "wrap": True, "spacing": "Small", "fontType": "Monospace"}
+        ])
+    
     return {
-        "$schema": "[http://adaptivecards.io/schemas/adaptive-card.json](http://adaptivecards.io/schemas/adaptive-card.json)", "type": "AdaptiveCard", "version": "1.4",
-        "body": [
-            {"type": "TextBlock", "text": f"CI/CD Pipeline Failed: {PIPELINE_NAME}", "weight": "Bolder", "size": "Large", "color": "Attention"},
-            {"type": "FactSet", "facts": [{"title": "Status:", "value": "🔴 Failure"}, {"title": "Author:", "value": AUTHOR}, {"title": "Commit:", "value": COMMIT_SHA[:7]}], "spacing": "Medium"},
-            {"type": "TextBlock", "text": "**AI Error Analysis:**", "wrap": True, "size": "Medium", "weight": "Bolder"},
-            {"type": "TextBlock", "text": analysis_text, "wrap": True, "spacing": "Small", "fontType": "Monospace"}
-        ],
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": body_elements,
         "actions": [{"type": "Action.OpenUrl", "title": "View Pipeline Run", "url": PIPELINE_URL}]
     }
 
@@ -277,22 +306,37 @@ def main():
         
         if not logs:
             analysis = "No logs were captured from the failed job."
+            parts = [analysis, "", ""]
         else:
-            analysis = get_langchain_analysis(logs)
-            
-        # Replace every newline with '  \n' to force a hard line break in Teams.
-        teams_compatible_analysis = analysis.replace('\n', '  \n')
+            full_response = get_langchain_analysis(logs)
+            # Parse the structured response
+            parts = full_response.split('---ANALYSIS-BREAK---')
+            error_analysis_raw = parts[0]
+            remediation_raw = ""
+            code_fix_raw = ""
+            if len(parts) > 1:
+                remediation_parts = parts[1].split('---CODE-BREAK---')
+                remediation_raw = remediation_parts[0]
+                if len(remediation_parts) > 1:
+                    code_fix_raw = remediation_parts[1]
+
+        # Clean up each part and apply Teams-specific formatting
+        error_analysis = error_analysis_raw.replace("SECTION 1: ERROR ANALYSIS", "").strip().replace('\n', '  \n')
+        remediation = remediation_raw.replace("SECTION 2: REMEDIATION", "").strip().replace('\n', '  \n')
+        code_fix = code_fix_raw.replace("SECTION 3: CODE FIX", "").strip().replace('\n', '  \n')
         
-        teams_card = create_teams_failure_card(teams_compatible_analysis)
+        teams_card = create_teams_failure_card(error_analysis, remediation, code_fix)
         send_to_teams(teams_card)
 
     except FileNotFoundError:
         print(f"Error: Log file not found at '{log_file_path}'.")
-        analysis = "Log file was not found. Could not perform analysis."
-        teams_card = create_teams_failure_card(analysis)
+        # Create a card even on local script error
+        teams_card = create_teams_failure_card("Log file was not found. Could not perform analysis.", "", "")
         send_to_teams(teams_card)
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+        teams_card = create_teams_failure_card(f"An unexpected error occurred in the notification script: {e}", "", "")
+        send_to_teams(teams_card)
 
 if __name__ == "__main__":
     if not GOOGLE_API_KEY:
