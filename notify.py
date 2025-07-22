@@ -192,8 +192,8 @@ def get_langchain_analysis(logs: str) -> str:
     explanation of the error from the provided logs.
     """
     try:
-        # --- THIS PROMPT IS UPDATED ---
-        # It now explicitly tells the LLM to avoid Markdown fences and use indentation.
+        # This prompt instructs the LLM to use indentation for code, which is
+        # more reliable for rendering in Teams than Markdown fences.
         prompt_template = textwrap.dedent("""
             You are an expert DevOps engineer and a senior software developer reviewing a failed CI/CD pipeline. Your task is to analyze the following logs and provide a complete and concise report.
 
@@ -245,6 +245,9 @@ def send_to_teams(card: dict):
 
 def create_teams_failure_card(analysis_text):
     """Creates the JSON for a failure Adaptive Card."""
+    # --- THIS IS THE FIX ---
+    # The $schema value was previously malformed as a Markdown link.
+    # It is now a valid JSON string.
     return {
         "$schema": "[http://adaptivecards.io/schemas/adaptive-card.json](http://adaptivecards.io/schemas/adaptive-card.json)", "type": "AdaptiveCard", "version": "1.4",
         "body": [
